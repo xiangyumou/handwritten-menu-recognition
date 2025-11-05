@@ -658,3 +658,22 @@ body {
         color: #f5f5f7;
     }
 }
+
+/* 页脚 */
+.page-footer {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    font-size: 12px;
+    color: #86868b;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+@media (prefers-color-scheme: dark) {
+    .page-footer {
+        color: #98989d;
+    }
+}
