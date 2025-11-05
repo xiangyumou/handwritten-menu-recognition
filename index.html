@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手写识别助手</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 标题区域 -->
+        <header class="header">
+            <h1 id="app-title">手写清单识别</h1>
+            <p id="app-description">智能识别手写购物清单，自动生成可编辑表格</p>
+            <div class="tips">
+                <span class="tip-item">📷 拖拽或点击上传</span>
+                <span class="tip-item">⌘V 粘贴图片</span>
+                <span class="tip-item">✏️ 双击编辑</span>
+                <span class="tip-item">📋 选中复制</span>
+            </div>
+        </header>
+
+        <!-- 上传区域 -->
+        <div class="upload-section">
+            <div id="dropzone" class="dropzone">
+                <div class="dropzone-content">
+                    <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <p class="dropzone-text">拖拽图片到这里</p>
+                    <p class="dropzone-subtext">或点击选择 · 支持 ⌘V 粘贴</p>
+                    <input type="file" id="file-input" accept="image/png,image/jpeg,image/jpg,image/webp" hidden>
+                </div>
+            </div>
+
+            <!-- 图片预览 -->
+            <div id="preview-section" class="preview-section" style="display: none;">
+                <div class="preview-container">
+                    <img id="preview-image" src="" alt="预览图片">
+                    <button id="remove-image" class="remove-btn" title="移除图片">✕</button>
+                </div>
+                <p id="file-info" class="file-info"></p>
+            </div>
+
+            <!-- 开始识别按钮 -->
+            <button id="recognize-btn" class="recognize-btn" style="display: none;">
+                🚀 开始识别
+            </button>
+        </div>
+
+        <!-- 进度区域 -->
+        <div id="progress-section" class="progress-section" style="display: none;">
+            <div class="progress-info">
+                <span id="progress-text">准备中...</span>
+                <span id="progress-percent">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <p id="progress-status" class="progress-status"></p>
+        </div>
+
+        <!-- 结果区域 -->
+        <div id="result-section" class="result-section" style="display: none;">
+            <h2 class="result-title">识别结果</h2>
+            <div class="table-container">
+                <table id="result-table" class="result-table">
+                    <thead>
+                        <tr>
+                            <th>物品名称</th>
+                            <th>数量</th>
+                            <th>单位</th>
+                            <th>备注</th>
+                        </tr>
+                    </thead>
+                    <tbody id="result-tbody">
+                        <!-- 结果将动态插入这里 -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="action-buttons">
+                <button id="copy-btn" class="action-btn copy-btn">
+                    📋 复制全部
+                </button>
+                <button id="retry-btn" class="action-btn retry-btn">
+                    🔄 重新识别
+                </button>
+            </div>
+        </div>
+
+        <!-- 错误提示 -->
+        <div id="error-section" class="error-section" style="display: none;">
+            <div class="error-content">
+                <span class="error-icon">⚠️</span>
+                <p id="error-message"></p>
+            </div>
+            <button id="error-retry-btn" class="action-btn retry-btn">
+                🔄 重试
+            </button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

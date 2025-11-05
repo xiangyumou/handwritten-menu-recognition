@@ -1,0 +1,25 @@
+{
+  "name": "ocr-web",
+  "version": "1.0.0",
+  "description": "手写识别助手 - Serverless OCR应用",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev . --port 8788",
+    "deploy": "wrangler pages deploy .",
+    "build": "echo 'No build step required'"
+  },
+  "keywords": [
+    "ocr",
+    "handwriting",
+    "cloudflare",
+    "serverless"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "openai": "^4.77.0"
+  },
+  "devDependencies": {
+    "wrangler": "^3.86.0"
+  }
+}

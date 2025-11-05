@@ -1,0 +1,22 @@
+{
+  "ocr": {
+    "concurrency": 5,
+    "ocrModel": "qwen-vl-max-latest",
+    "decisionModel": "qwen-max-latest",
+    "enableThinking": false,
+    "timeout": 30000
+  },
+  "prompt": {
+    "ocrInstruction": "请识别图片中的手写文字内容，这是一份购物清单或库存清单。\n\n要求：\n1. 识别所有手写的中文文字\n2. 按照【物品名称、数量、单位、备注】的格式整理\n3. 单位是指计量单位，如：个、瓶、袋、包、斤、公斤、克、箱、盒等\n4. 如果某项没有数量、单位或备注，用空字符串表示\n5. 返回JSON数组格式[[\"物品\", \"数量\", \"单位\", \"备注\"], ...]\n\n直接返回JSON数组，不要任何其他解释文字。",
+    "decisionInstruction": "以下是多次OCR识别的结果，请基于原图和这些结果，给出最准确的最终结果。\n\n要求：\n1. 综合所有识别结果，选择最准确的内容\n2. 返回JSON数组格式：[[\"物品\", \"数量\", \"单位\", \"备注\"], ...]\n3. 单位是指计量单位，如：个、瓶、袋、包、斤、公斤、克、箱、盒等\n4. 直接返回JSON数组，不要任何其他解释文字"
+  },
+  "upload": {
+    "maxSizeMB": 10,
+    "allowedFormats": ["image/png", "image/jpeg", "image/jpg", "image/webp"]
+  },
+  "ui": {
+    "title": "菜单识别助手",
+    "description": "上传手写清单图片，自动识别为可复制的表格",
+    "thumbnailSize": 200
+  }
+}
