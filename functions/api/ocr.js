@@ -1,5 +1,35 @@
 import OpenAI from 'openai';
 
+// 结构化日志工具
+const logger = {
+    info(message, context = {}) {
+        console.log(JSON.stringify({
+            level: 'info',
+            message,
+            timestamp: new Date().toISOString(),
+            ...context
+        }));
+    },
+    error(message, error, context = {}) {
+        console.error(JSON.stringify({
+            level: 'error',
+            message,
+            error: error?.message || error,
+            stack: error?.stack,
+            timestamp: new Date().toISOString(),
+            ...context
+        }));
+    },
+    warn(message, context = {}) {
+        console.warn(JSON.stringify({
+            level: 'warn',
+            message,
+            timestamp: new Date().toISOString(),
+            ...context
+        }));
+    }
+};
+
 // 加载配置
 async function loadConfig() {
     try {
@@ -8,7 +38,7 @@ async function loadConfig() {
         const response = await fetch(configUrl);
         return await response.json();
     } catch (error) {
-        console.error('加载配置失败:', error);
+        logger.error('加载配置失败', error);
         // 返回默认配置
         return {
             ocr: {
@@ -39,7 +69,7 @@ function parseJSONResult(content) {
         }
         return null;
     } catch (error) {
-        console.error('JSON解析失败:', error);
+        logger.error('JSON解析失败', error);
         return null;
     }
 }
@@ -47,8 +77,8 @@ function parseJSONResult(content) {
 // 执行单次OCR识别
 async function performOCR(client, imageBase64, prompt, model, attemptId, enableThinking) {
     try {
-        console.log(`开始第${attemptId + 1}次OCR识别`);
-        
+        logger.info('开始OCR识别', { attemptId: attemptId + 1, model });
+
         const completion = await client.chat.completions.create({
             model: model,
             messages: [{
@@ -68,13 +98,13 @@ async function performOCR(client, imageBase64, prompt, model, attemptId, enableT
                 enable_thinking: enableThinking
             }
         });
-        
+
         const content = completion.choices[0].message.content;
-        console.log(`第${attemptId + 1}次OCR结果:`, content.substring(0, 100));
-        
+        logger.info('OCR识别完成', { attemptId: attemptId + 1, contentLength: content.length });
+
         return content;
     } catch (error) {
-        console.error(`第${attemptId + 1}次OCR失败:`, error);
+        logger.error('OCR识别失败', error, { attemptId: attemptId + 1 });
         throw error;
     }
 }
@@ -82,14 +112,14 @@ async function performOCR(client, imageBase64, prompt, model, attemptId, enableT
 // 整合多次识别结果
 async function consolidateResults(client, imageBase64, validResults, prompt, model) {
     try {
-        console.log('开始整合结果，有效结果数:', validResults.length);
-        
+        logger.info('开始整合结果', { validResultsCount: validResults.length });
+
         const resultsText = validResults
             .map((result, i) => `第${i + 1}次识别结果：\n${JSON.stringify(result, null, 2)}`)
             .join('\n\n');
-        
+
         const fullPrompt = `${prompt}\n\n${resultsText}`;
-        
+
         const completion = await client.chat.completions.create({
             model: model,
             messages: [{
@@ -106,13 +136,13 @@ async function consolidateResults(client, imageBase64, validResults, prompt, mod
                 ]
             }]
         });
-        
+
         const content = completion.choices[0].message.content;
-        console.log('整合结果:', content);
-        
+        logger.info('结果整合完成', { contentLength: content.length });
+
         return parseJSONResult(content);
     } catch (error) {
-        console.error('整合结果失败:', error);
+        logger.error('整合结果失败', error);
         throw error;
     }
 }
@@ -150,13 +180,13 @@ function sendResult(encoder, items, metadata) {
 // 主处理函数（流式响应版本）
 export async function onRequestPost(context) {
     const startTime = Date.now();
-    
+
     try {
         // 解析请求体
         const requestBody = await context.request.json();
         const { image, concurrency, enableThinking } = requestBody;
-        
-        // 验证参数
+
+        // 验证参数 - 图片存在性
         if (!image) {
             return new Response(JSON.stringify({
                 success: false,
@@ -169,13 +199,62 @@ export async function onRequestPost(context) {
                 headers: { 'Content-Type': 'application/json' }
             });
         }
-        
+
+        // 验证Base64格式
+        if (typeof image !== 'string' || !image.startsWith('data:image/')) {
+            return new Response(JSON.stringify({
+                success: false,
+                error: {
+                    code: 'INVALID_FORMAT',
+                    message: '图片格式无效，必须是Base64编码的图片'
+                }
+            }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        // 验证MIME类型
+        const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+        const mimeType = image.substring(5, image.indexOf(';'));
+        if (!allowedMimeTypes.includes(mimeType)) {
+            return new Response(JSON.stringify({
+                success: false,
+                error: {
+                    code: 'UNSUPPORTED_FORMAT',
+                    message: `不支持的图片格式: ${mimeType}。仅支持 PNG, JPG, JPEG, WebP`
+                }
+            }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        // 验证图片大小（Base64编码后约为原始大小的1.37倍）
+        const base64Data = image.split(',')[1] || image;
+        const sizeInBytes = (base64Data.length * 3) / 4;
+        const sizeInMB = sizeInBytes / (1024 * 1024);
+        const maxSizeMB = 10;
+
+        if (sizeInMB > maxSizeMB) {
+            return new Response(JSON.stringify({
+                success: false,
+                error: {
+                    code: 'IMAGE_TOO_LARGE',
+                    message: `图片过大(${sizeInMB.toFixed(1)}MB)，最大支持 ${maxSizeMB} MB`
+                }
+            }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
         // 加载配置
         const config = await loadConfig();
-        
+
         // 使用请求参数或配置中的并发数
         const actualConcurrency = concurrency || config.ocr.concurrency || 5;
-        
+
         // 验证并发数
         if (actualConcurrency < 1 || actualConcurrency > 10) {
             return new Response(JSON.stringify({
@@ -189,7 +268,7 @@ export async function onRequestPost(context) {
                 headers: { 'Content-Type': 'application/json' }
             });
         }
-        
+
         // 初始化OpenAI客户端
         const apiKey = context.env.DASHSCOPE_API_KEY;
         if (!apiKey) {
@@ -204,12 +283,12 @@ export async function onRequestPost(context) {
                 headers: { 'Content-Type': 'application/json' }
             });
         }
-        
+
         const client = new OpenAI({
             apiKey: apiKey,
             baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
         });
-        
+
         // 创建流式响应
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
@@ -217,10 +296,10 @@ export async function onRequestPost(context) {
                 try {
                     // 发送初始进度
                     controller.enqueue(sendProgress(encoder, 5, '正在准备识别...'));
-                    
-                    console.log(`开始${actualConcurrency}次并发OCR识别`);
+
+                    logger.info('开始OCR请求', { concurrency: actualConcurrency });
                     controller.enqueue(sendProgress(encoder, 10, `开始${actualConcurrency}次并发识别...`));
-                    
+
                     // 并发执行OCR识别，追踪完成进度
                     let completedCount = 0;
                     const ocrPromises = Array.from({ length: actualConcurrency }, async (_, i) => {
@@ -232,7 +311,7 @@ export async function onRequestPost(context) {
                             i,
                             enableThinking || config.ocr.enableThinking
                         );
-                        
+
                         completedCount++;
                         const progress = 10 + Math.floor((completedCount / actualConcurrency) * 60);
                         controller.enqueue(sendProgress(
@@ -240,25 +319,25 @@ export async function onRequestPost(context) {
                             progress,
                             `识别进度：${completedCount}/${actualConcurrency}`
                         ));
-                        
+
                         return result;
                     });
-                    
+
                     const ocrResults = await Promise.all(ocrPromises);
                     controller.enqueue(sendProgress(encoder, 70, '所有识别请求已完成'));
-                    
+
                     // 解析所有结果
                     const validResults = ocrResults
                         .map(result => parseJSONResult(result))
                         .filter(result => result !== null);
-                    
-                    console.log(`有效识别结果数: ${validResults.length}/${actualConcurrency}`);
+
+                    logger.info('解析OCR结果', { validCount: validResults.length, total: actualConcurrency });
                     controller.enqueue(sendProgress(
                         encoder,
                         75,
                         `解析完成，有效结果：${validResults.length}/${actualConcurrency}`
                     ));
-                    
+
                     if (validResults.length === 0) {
                         controller.enqueue(sendError(
                             encoder,
@@ -268,7 +347,7 @@ export async function onRequestPost(context) {
                         controller.close();
                         return;
                     }
-                    
+
                     // 如果只有一个有效结果，直接返回
                     let finalResult;
                     if (validResults.length === 1) {
@@ -277,7 +356,7 @@ export async function onRequestPost(context) {
                     } else {
                         // 使用决策模型整合多个结果
                         controller.enqueue(sendProgress(encoder, 80, '正在整合多个识别结果...'));
-                        
+
                         finalResult = await consolidateResults(
                             client,
                             image,
@@ -285,10 +364,10 @@ export async function onRequestPost(context) {
                             config.prompt.decisionInstruction,
                             config.ocr.decisionModel
                         );
-                        
+
                         controller.enqueue(sendProgress(encoder, 95, '结果整合完成'));
                     }
-                    
+
                     if (!finalResult) {
                         controller.enqueue(sendError(
                             encoder,
@@ -298,10 +377,15 @@ export async function onRequestPost(context) {
                         controller.close();
                         return;
                     }
-                    
+
                     const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
-                    console.log(`处理完成，耗时: ${processingTime}秒`);
-                    
+                    logger.info('OCR处理完成', {
+                        processingTime,
+                        concurrency: actualConcurrency,
+                        validAttempts: validResults.length,
+                        itemsCount: finalResult.length
+                    });
+
                     // 发送最终结果
                     controller.enqueue(sendResult(
                         encoder,
@@ -312,11 +396,11 @@ export async function onRequestPost(context) {
                             processingTime: parseFloat(processingTime)
                         }
                     ));
-                    
+
                     controller.close();
-                    
+
                 } catch (error) {
-                    console.error('OCR处理错误:', error);
+                    logger.error('OCR处理错误', error);
                     controller.enqueue(sendError(
                         encoder,
                         'INTERNAL_ERROR',
@@ -326,7 +410,7 @@ export async function onRequestPost(context) {
                 }
             }
         });
-        
+
         return new Response(stream, {
             headers: {
                 'Content-Type': 'application/x-ndjson',
@@ -334,10 +418,10 @@ export async function onRequestPost(context) {
                 'Connection': 'keep-alive'
             }
         });
-        
+
     } catch (error) {
         console.error('OCR处理错误:', error);
-        
+
         return new Response(JSON.stringify({
             success: false,
             error: {
